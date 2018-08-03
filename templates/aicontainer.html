@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width">
+    <title>Document</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u"
+          crossorigin="anonymous">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap-theme.min.css" integrity="sha384-rHyoN1iRsVXV4nD0JutlnGaslCJuC7uwjduW9SVrLvRYooPp2bWYgmgJQIXwl/Sp"
+          crossorigin="anonymous">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <title>Container Detection</title>
+</head>
+
+<body>
+<div class="container">
+    <div class="row">
+        <div class="col-md-12">
+            <div style="width: 700px; margin: 0 auto" class="text-center">
+                <h2>貨櫃辨識</h2>
+                <div style="text-align:right;">
+                    <a  href="/demo"><input type="button" class="btn btn-primary"  value="檢視紀錄"></input></a>
+                </div>
+                <!--<div id="loading-progress" style="display: none">-->
+                    <!--<div class="loader"></div>-->
+                    <!--<div class="load-text">正在解析...</div>-->
+                <!--</div>-->
+                <div style="width: 100%; max-height: 500px">
+                    <img id="container_pic" src="{{ url_for('static', filename='dummy-image.jpg') }}" alt="Responsive image" >
+                </div>
+
+                <!--<div id="upload-progress" class="progress" style="visibility: visible; margin-top: 20px">-->
+                    <!--<div id="upload-progress-bar" class="progress-bar" role="progressbar" aria-valuenow="60"-->
+                         <!--aria-valuemin="0"-->
+                         <!--aria-valuemax="100"></div>-->
+                <!--</div>-->
+
+                <form method="post" id="test-form" enctype="multipart/form-data">
+                    <div class="form-group" style="margin-top: 20px">
+                        <label for="form-file" class="custom-file-upload">
+                            <i class="fa fa-cloud-upload"></i> 選擇圖片
+                        </label>
+                        <input id="form-file" accept="image/gif,image/jpeg,image/jpg,image/png,image/svg" type="file" name="file" multiple/>
+                        <p id="file-info" class="help-block"></p>
+                    </div>
+                </form>
+                <div><input type="button" class="btn btn-primary" id="Upload" value="開始辨識"></div>
+                <div id="predict_result" class="row" style="margin-top: 30px; display: none"></div>
+                <div><a id=save_success style="display: none; color: #2a50b9">保存成功</a></div>
+                <div><input type="button" class="btn btn-primary" id="savebutton" value="保存" style="display:none"/></div>
+                <div><a id=save_filed style="display: none; color: #dd0000;">保存失敗</a></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="loadingModal">
+    <div style="width: 400px; height: 20px; z-index: 20000; position: absolute; text-align: center; top: -400px; left: 0; right: 0; bottom: 0; margin: auto;">
+        <div class="progress progress-striped active" style="margin-bottom: 0;">
+            <div class="progress-bar" style="width: 100%;"></div>
+        </div>
+        <h5 id="load-text" class="load-text">wait for ocr</h5>
+    </div>
+</div>
+
+
+<script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa"
+        crossorigin="anonymous"></script>
+<script src="{{ url_for('static', filename='style.css') }}"></script>
+
+
+<script>
+    // preview image
+        var ipt = document.getElementById('form-file');
+        var upload = document.getElementById('Upload');
+        var save = document.getElementById('savebutton');
+        
+        var filename;
+        var filepath;
+        ipt.onchange  = function () {
+        //grab current video frame and put it into a canvas element, consider screenshotsize
+            var data=new FormData()
+            var img =  document.getElementById('container_pic');
+            var form_data = new FormData($('#test-form')[0]);
+            $.ajax({
+                url:"/encoding",
+                type:'POST',
+                data:form_data,
+                processData:false,
+                contentType:false,
+                dataType:'json',
+                success:function(data){
+                    img.src = data;
+                    filepath = data;
+                    filename = filepath.split('\\').pop().split('/').pop();
+              },
+              error:function(res){
+                  console.log("upload error",res);
+              }
+              
+          })
+        }
+        
+        
+        upload.onclick = function () {
+            data = {'path': filepath};
+            $('#loadingModal').modal({backdrop: 'static', keyboard: false});
+            $('#predict_result').html('');
+            $("#savebutton").hide();
+            $("save_filed").hide();
+            $.ajax({
+                url:"/ocr",
+                type:'POST',
+                data: JSON.stringify(data),
+                processData:false,
+                contentType: 'application/json',
+                dataType:'json',
+                success:function(data){
+                    $("#loadingModal").modal('hide');
+                    $("#predict_result").show();
+                    for(var i in data) {
+                        $('#predict_result').append('<div class ="col-sm-6"><input type="checkbox" name="boxvalue[]" /><img class="ocr-image" src='+i+'><input type ="text" class="form-control" value ='+ data[i] +' /></div>')
+                    }
+                    $("#savebutton").show();
+                },
+                error:function(res){
+                    console.log("upload error",res);
+                    $("#loadingModal").modal('hide');
+                }
+            })
+        }
+
+        save.onclick = function () {
+            var saveboxvalue = new Array();
+            $("input[name='boxvalue[]']").each(function (i) {
+                if($(this).is(':checked')){
+                    saveboxvalue[i] = $(this).siblings(".form-control").val();
+                }
+            });
+            saveboxvalue = saveboxvalue.filter(function(e){return e});
+            data= {'filename':filename,'filepath':filepath,'saveboxvalue':saveboxvalue}
+            $.ajax({
+                url:"/savebox",
+                type:'POST',
+                data: JSON.stringify(data),
+                processData:false,
+                contentType: 'application/json',
+                success:function(data){
+                    $("#predict_result").hide();
+                    $("#save_success").show();
+                    $("#savebutton").hide();
+                },
+                error:function(res){
+                    $("save_filed").show();
+                }
+            })
+
+            // if ($('#boxvalue').is(":checked")) {
+            //     var data = $(".ocr-value").value
+            //     console.log(data);
+            // }
+        }
+
+
+
+</script>
+
+</body>
+</html>
